@@ -17,21 +17,34 @@ L.Marker.prototype.options.icon = DefaultIcon;
 // User position icon (custom blue dot)
 const UserIcon = L.divIcon({
   className: 'user-marker',
-  html: `<div class="relative flex h-6 w-6">
-    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-    <span class="relative inline-flex rounded-full h-6 w-6 bg-primary border-4 border-white shadow-lg"></span>
+  html: `<div class="relative flex h-8 w-8">
+    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-500 opacity-75"></span>
+    <span class="relative inline-flex rounded-full h-8 w-8 bg-blue-600 border-4 border-white shadow-xl"></span>
   </div>`,
-  iconSize: [24, 24],
-  iconAnchor: [12, 12],
+  iconSize: [32, 32],
+  iconAnchor: [16, 16],
 });
 
-function MapRecenter({ position }: { position: { lat: number; lng: number } | null }) {
+function MapController({ position }: { position: { lat: number; lng: number } | null }) {
   const map = useMap();
+  
   useEffect(() => {
+    const handleRecenter = (e: any) => {
+      if (e.detail) {
+        map.setView([e.detail.lat, e.detail.lng], 16, { animate: true });
+      }
+    };
+    
+    window.addEventListener('map-recenter', handleRecenter);
+    
+    // Initial centering
     if (position) {
-      map.setView([position.lat, position.lng]);
+      map.setView([position.lat, position.lng], 15);
     }
+    
+    return () => window.removeEventListener('map-recenter', handleRecenter);
   }, [position, map]);
+  
   return null;
 }
 
@@ -40,47 +53,48 @@ interface SafeMapProps {
 }
 
 export default function SafeMap({ userPosition }: SafeMapProps) {
+  // Center of US if no position
   const initialPosition = userPosition || { lat: 37.7749, lng: -122.4194 };
 
   return (
     <MapContainer 
       center={[initialPosition.lat, initialPosition.lng]} 
       zoom={14} 
-      scrollWheelZoom={true}
       zoomControl={false}
+      className="z-0"
     >
       <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
       
-      {/* Risk Zones */}
+      {/* Risk Zones Rendering */}
       {RISK_ZONES.map((zone) => (
         <Circle
           key={zone.id}
           center={[zone.lat, zone.lng]}
           pathOptions={{
-            fillColor: zone.level === 'high' ? 'hsl(var(--destructive))' : 'hsl(var(--warning))',
-            color: zone.level === 'high' ? 'hsl(var(--destructive))' : 'hsl(var(--warning))',
-            fillOpacity: 0.35,
+            fillColor: zone.level === 'high' ? '#ef4444' : '#f59e0b',
+            color: zone.level === 'high' ? '#dc2626' : '#d97706',
+            fillOpacity: 0.3,
             weight: 2
           }}
           radius={zone.radius}
         >
           <Popup>
-            <div className="p-1">
-              <p className="font-bold m-0">{zone.type}</p>
-              <p className="text-xs text-muted-foreground mt-1">{zone.description}</p>
+            <div className="p-2">
+              <p className="font-bold text-slate-900 m-0">{zone.type}</p>
+              <p className="text-xs text-slate-500 mt-1">{zone.description}</p>
             </div>
           </Popup>
         </Circle>
       ))}
 
-      {/* User Marker */}
+      {/* User Current Location */}
       {userPosition && (
         <>
           <Marker position={[userPosition.lat, userPosition.lng]} icon={UserIcon} />
-          <MapRecenter position={userPosition} />
+          <MapController position={userPosition} />
         </>
       )}
     </MapContainer>

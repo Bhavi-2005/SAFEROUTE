@@ -1,61 +1,41 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { RISK_ZONES, RiskZone } from '@/lib/risk-zones';
 import { calculateDistance } from '@/lib/geo-utils';
-import { contextualRiskWarning } from '@/ai/flows/contextual-risk-warning';
 
 export interface SafetyState {
   currentPosition: { lat: number; lng: number } | null;
   activeRisk: RiskZone | null;
-  aiWarning: string | null;
   distanceToRisk: number | null;
   trackingError: string | null;
+  isTracking: boolean;
 }
 
 export function useSafetyTracker() {
   const [state, setState] = useState<SafetyState>({
     currentPosition: null,
     activeRisk: null,
-    aiWarning: null,
     distanceToRisk: null,
     trackingError: null,
+    isTracking: false,
   });
 
-  const lastAlertedZoneId = useRef<string | null>(null);
-  const isSpeaking = useRef(false);
+  const lastAlertTime = useRef<number>(0);
+  const ALERT_COOLDOWN = 10000; // 10 seconds between voice alerts
 
-  const triggerAlert = useCallback(async (zone: RiskZone, distance: number) => {
-    // Multi-modal feedback
-    if (typeof window !== 'undefined') {
-      // 1. Vibration
-      if ('vibrate' in navigator) {
-        navigator.vibrate([200, 100, 200]);
-      }
-
-      // 2. Speech Synthesis
-      if ('speechSynthesis' in window && !isSpeaking.current) {
-        const utterance = new SpeechSynthesisUtterance(
-          `Warning! ${zone.level} risk zone ahead. ${zone.type} in ${Math.round(distance)} meters.`
-        );
-        utterance.onstart = () => { isSpeaking.current = true; };
-        utterance.onend = () => { isSpeaking.current = false; };
-        window.speechSynthesis.speak(utterance);
-      }
+  const triggerAlert = useCallback((zone: RiskZone, distance: number) => {
+    const now = Date.now();
+    
+    // 1. Vibration feedback (Mobile only)
+    if (typeof window !== 'undefined' && 'vibrate' in navigator) {
+      navigator.vibrate([300, 100, 300]);
     }
 
-    // 3. AI Warning Flow
-    if (zone.id !== lastAlertedZoneId.current) {
-      lastAlertedZoneId.current = zone.id;
-      try {
-        const result = await contextualRiskWarning({
-          riskLevel: zone.level,
-          hazardType: zone.type,
-          hazardDescription: zone.description,
-          distanceMeters: Math.round(distance),
-        });
-        setState(prev => ({ ...prev, aiWarning: result.warningMessage }));
-      } catch (error) {
-        console.error("AI Warning generation failed", error);
-      }
+    // 2. Voice feedback (with cooldown to prevent spam)
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window && (now - lastAlertTime.current > ALERT_COOLDOWN)) {
+      const message = `Caution. Approaching ${zone.type}. ${Math.round(distance)} meters ahead.`;
+      const utterance = new SpeechSynthesisUtterance(message);
+      window.speechSynthesis.speak(utterance);
+      lastAlertTime.current = now;
     }
   }, []);
 
@@ -71,10 +51,11 @@ export function useSafetyTracker() {
         let closestZone: RiskZone | null = null;
         let minDistance = Infinity;
 
-        // Rule-based risk detection
+        // Proximity detection logic
         RISK_ZONES.forEach((zone) => {
           const distance = calculateDistance(lat, lng, zone.lat, zone.lng);
-          if (distance < zone.radius && distance < minDistance) {
+          // Alert if within 400 meters
+          if (distance <= 400 && distance < minDistance) {
             minDistance = distance;
             closestZone = zone;
           }
@@ -82,8 +63,6 @@ export function useSafetyTracker() {
 
         if (closestZone) {
           triggerAlert(closestZone, minDistance);
-        } else {
-          lastAlertedZoneId.current = null;
         }
 
         setState(prev => ({
@@ -91,16 +70,21 @@ export function useSafetyTracker() {
           currentPosition: { lat, lng },
           activeRisk: closestZone,
           distanceToRisk: closestZone ? minDistance : null,
-          aiWarning: closestZone ? prev.aiWarning : null,
           trackingError: null,
+          isTracking: true,
         }));
       },
       (error) => {
-        setState(prev => ({ ...prev, trackingError: error.message }));
+        let message = "Unknown location error";
+        if (error.code === 1) message = "Permission denied. Please enable GPS.";
+        else if (error.code === 2) message = "Position unavailable.";
+        else if (error.code === 3) message = "Timed out waiting for GPS.";
+        
+        setState(prev => ({ ...prev, trackingError: message, isTracking: false }));
       },
       {
         enableHighAccuracy: true,
-        timeout: 10000,
+        timeout: 15000,
         maximumAge: 0,
       }
     );

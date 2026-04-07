@@ -3,86 +3,107 @@
 import dynamic from 'next/dynamic';
 import { useSafetyTracker } from '@/hooks/use-safety-tracker';
 import { WarningBanner } from '@/components/WarningBanner';
-import { RiskLegend } from '@/components/RiskLegend';
-import { Navigation, ShieldCheck, Map as MapIcon, Loader2, AlertCircle } from 'lucide-react';
+import { ShieldCheck, Loader2, AlertTriangle, Navigation2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 // Dynamically import Leaflet Map to avoid SSR errors
 const SafeMap = dynamic(() => import('@/components/SafeMap'), { 
   ssr: false,
   loading: () => (
-    <div className="w-full h-full bg-muted flex items-center justify-center flex-col gap-4">
-      <Loader2 className="w-12 h-12 text-primary animate-spin" />
-      <p className="font-medium text-muted-foreground">Initializing Safety Maps...</p>
+    <div className="w-full h-full bg-slate-50 flex items-center justify-center flex-col gap-4">
+      <Loader2 className="w-10 h-10 text-primary animate-spin" />
+      <p className="font-medium text-slate-500">Initializing Map...</p>
     </div>
   )
 });
 
 export default function Home() {
-  const { currentPosition, activeRisk, aiWarning, distanceToRisk, trackingError } = useSafetyTracker();
+  const { currentPosition, activeRisk, distanceToRisk, trackingError, isTracking } = useSafetyTracker();
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden flex flex-col bg-background">
-      {/* Top Banner Area */}
+    <div className="relative h-[100dvh] w-full overflow-hidden flex flex-col bg-slate-50">
+      {/* Visual Warning Overlay */}
       <WarningBanner 
         activeRisk={activeRisk} 
-        aiWarning={aiWarning} 
+        aiWarning={null} // AI disabled per request
         distance={distanceToRisk} 
       />
 
-      {/* Header / Brand */}
-      <header className="absolute top-4 left-4 right-4 z-[500] pointer-events-none flex justify-between items-start">
-        {!activeRisk && (
-          <div className="bg-white/90 backdrop-blur-md px-4 py-2 rounded-full shadow-sm border border-border flex items-center gap-2 pointer-events-auto">
-            <ShieldCheck className="w-5 h-5 text-primary" />
-            <span className="font-bold text-sm tracking-tight">SafeRoute AI</span>
-          </div>
-        )}
+      {/* Header Branding */}
+      <header className="absolute top-4 left-4 z-[1000] pointer-events-none">
+        <div className="bg-white/90 backdrop-blur-sm px-4 py-2 rounded-full shadow-lg border border-slate-200 flex items-center gap-2 pointer-events-auto">
+          <ShieldCheck className="w-5 h-5 text-primary" />
+          <span className="font-bold text-sm text-slate-900">SafeRoute AI</span>
+        </div>
       </header>
 
-      {/* Error State */}
+      {/* Connection / Status Badge */}
+      <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-[1000] pointer-events-none">
+        <div className="bg-slate-900/80 backdrop-blur-md px-4 py-1.5 rounded-full flex items-center gap-2 shadow-xl border border-white/10">
+          <div className={`w-2 h-2 rounded-full ${isTracking ? 'bg-green-400 animate-pulse' : 'bg-amber-400'}`} />
+          <span className="text-[10px] font-bold text-white uppercase tracking-wider">
+            {isTracking ? 'GPS Active' : 'Connecting GPS...'}
+          </span>
+        </div>
+      </div>
+
+      {/* Error / Permission Prompt */}
       {trackingError && (
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[2000] w-full max-w-sm">
-          <div className="bg-destructive/10 backdrop-blur-md border-2 border-destructive p-6 rounded-2xl shadow-xl text-center">
-            <AlertCircle className="w-12 h-12 text-destructive mx-auto mb-4" />
-            <h2 className="text-xl font-bold mb-2">Tracking Interrupted</h2>
-            <p className="text-sm text-muted-foreground mb-4">{trackingError}</p>
-            <Button onClick={() => window.location.reload()} variant="default" className="w-full">
-              Restart Tracker
-            </Button>
-          </div>
+        <div className="absolute inset-0 z-[2000] bg-white/80 backdrop-blur-sm flex items-center justify-center p-6">
+          <Alert variant="destructive" className="max-w-md shadow-2xl bg-white">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>Location Access Required</AlertTitle>
+            <AlertDescription className="mt-2">
+              <p className="mb-4">{trackingError}</p>
+              <Button onClick={() => window.location.reload()} variant="default" className="w-full">
+                Try Again
+              </Button>
+            </AlertDescription>
+          </Alert>
         </div>
       )}
 
-      {/* Main Map View */}
+      {/* Full Screen Map */}
       <main className="flex-1 w-full relative">
         <SafeMap userPosition={currentPosition} />
       </main>
 
-      {/* Overlay UI elements */}
-      <div className="absolute bottom-8 left-4 z-[500] w-64 md:w-72 hidden sm:block">
-        <RiskLegend />
+      {/* Quick Action Button */}
+      <div className="absolute bottom-8 right-6 z-[1000]">
+        <Button 
+          size="icon" 
+          variant="default" 
+          className="w-14 h-14 rounded-2xl shadow-2xl transition-transform active:scale-90"
+          onClick={() => {
+            if (currentPosition) {
+              window.dispatchEvent(new CustomEvent('map-recenter', { detail: currentPosition }));
+            }
+          }}
+        >
+          <Navigation2 className="w-6 h-6" />
+        </Button>
       </div>
 
-      <div className="absolute bottom-8 right-4 z-[500] flex flex-col gap-3">
-        <div className="bg-white/90 backdrop-blur-md p-3 rounded-2xl shadow-lg border border-border flex flex-col items-center gap-4">
-          <Button size="icon" variant="ghost" className="rounded-xl hover:bg-primary/10 hover:text-primary">
-            <Navigation className="w-5 h-5" />
-          </Button>
-          <div className="w-full h-px bg-border" />
-          <Button size="icon" variant="ghost" className="rounded-xl hover:bg-primary/10 hover:text-primary">
-            <MapIcon className="w-5 h-5" />
-          </Button>
+      {/* Safety Footer Info (Mobile Friendly) */}
+      <footer className="h-20 bg-white border-t border-slate-200 flex items-center px-6 justify-between z-[1000]">
+        <div className="flex flex-col">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Current Status</span>
+          <span className="text-sm font-bold text-slate-700">
+            {activeRisk ? 'Entering Hazard Zone' : 'All Routes Clear'}
+          </span>
         </div>
-      </div>
-
-      {/* Location Status Badge */}
-      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-[500]">
-        <div className="bg-primary px-5 py-2.5 rounded-full shadow-2xl flex items-center gap-2.5 text-primary-foreground font-bold text-sm">
-          <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
-          {currentPosition ? 'Tracking Real-time' : 'Waiting for GPS...'}
+        <div className="flex items-center gap-2">
+           <div className="h-8 w-px bg-slate-100 mx-2" />
+           <div className="text-right">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Active Protection</span>
+              <div className="flex gap-1 justify-end">
+                <div className="w-1.5 h-1.5 rounded-full bg-primary" />
+                <div className="w-1.5 h-1.5 rounded-full bg-primary" />
+              </div>
+           </div>
         </div>
-      </div>
+      </footer>
     </div>
   );
 }
