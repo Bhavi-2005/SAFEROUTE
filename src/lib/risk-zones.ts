@@ -6,12 +6,13 @@ export interface RiskZone {
   lng: number;
   radius: number; // radius for visualization in meters
   level: RiskLevel;
+  severity: number; // 1-10 scale
   type: string;
   description: string;
 }
 
 /**
- * 2) Hardcoded Accident Risk Zones (3-5 zones)
+ * 2) Hardcoded Accident Risk Zones (5 zones as requested)
  */
 export const RISK_ZONES: RiskZone[] = [
   {
@@ -20,6 +21,7 @@ export const RISK_ZONES: RiskZone[] = [
     lng: -122.4194,
     radius: 400,
     level: 'high',
+    severity: 9,
     type: 'Complex Intersection',
     description: 'High frequency of blind turns and pedestrian traffic.',
   },
@@ -29,6 +31,7 @@ export const RISK_ZONES: RiskZone[] = [
     lng: -122.4167,
     radius: 400,
     level: 'medium',
+    severity: 6,
     type: 'Narrow Corridor',
     description: 'Reduced visibility and high cyclist activity.',
   },
@@ -38,6 +41,7 @@ export const RISK_ZONES: RiskZone[] = [
     lng: -122.4862,
     radius: 400,
     level: 'high',
+    severity: 10,
     type: 'Highway Curve',
     description: 'Sharp blind curve with heavy high-speed traffic.',
   },
@@ -47,6 +51,7 @@ export const RISK_ZONES: RiskZone[] = [
     lng: -122.4012,
     radius: 400,
     level: 'high',
+    severity: 8,
     type: 'Steep Descent',
     description: 'Steep grade with risk of high-speed collisions.',
   },
@@ -56,6 +61,7 @@ export const RISK_ZONES: RiskZone[] = [
     lng: -122.4476,
     radius: 400,
     level: 'medium',
+    severity: 7,
     type: 'School Zone',
     description: 'Increased child pedestrian traffic during school hours.',
   }

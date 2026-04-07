@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import dynamic from 'next/dynamic';
-import { AlertTriangle, Navigation, MapPin, Loader2, ShieldAlert } from 'lucide-react';
+import { AlertTriangle, MapPin, Loader2, ShieldAlert } from 'lucide-react';
 import { calculateDistance } from '@/lib/geo-utils';
 import { RISK_ZONES, RiskZone } from '@/lib/risk-zones';
 import { WarningBanner } from '@/components/WarningBanner';
@@ -35,6 +35,7 @@ export default function SafeRouteApp() {
   const [activeRisk, setActiveRisk] = useState<RiskZone | null>(null);
   const [currentDistance, setCurrentDistance] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [L, setL] = useState<any>(null);
   
   // Cooldown to prevent alert spam (15 seconds)
   const lastAlertTime = useRef<number>(0);
@@ -42,6 +43,10 @@ export default function SafeRouteApp() {
 
   useEffect(() => {
     setMounted(true);
+    // Dynamically import leaflet to avoid SSR issues
+    import('leaflet').then((leaflet) => {
+      setL(leaflet);
+    });
   }, []);
 
   /**
@@ -58,7 +63,7 @@ export default function SafeRouteApp() {
     
     // 2. Voice Alert (Text-to-Speech)
     if (typeof window !== 'undefined' && window.speechSynthesis) {
-      const message = `Warning! ${zone.level} risk zone ahead in ${Math.round(distance)} meters. ${zone.description}`;
+      const message = `Warning! High risk zone ahead in ${Math.round(distance)} meters. ${zone.description}`;
       const utterance = new SpeechSynthesisUtterance(message);
       utterance.rate = 1.0;
       window.speechSynthesis.speak(utterance);
@@ -66,6 +71,32 @@ export default function SafeRouteApp() {
 
     lastAlertTime.current = now;
   }, []);
+
+  /**
+   * Risk Detection Logic
+   */
+  const checkRisk = useCallback((lat: number, lng: number) => {
+    let closestZone: RiskZone | null = null;
+    let minDistance = Infinity;
+
+    RISK_ZONES.forEach(zone => {
+      const d = calculateDistance(lat, lng, zone.lat, zone.lng);
+      // Requirement: distance < 400 meters AND severity >= 8
+      if (d <= 400 && zone.severity >= 8 && d < minDistance) {
+        minDistance = d;
+        closestZone = zone;
+      }
+    });
+
+    if (closestZone) {
+      setActiveRisk(closestZone);
+      setCurrentDistance(minDistance);
+      triggerAlert(closestZone, minDistance);
+    } else {
+      setActiveRisk(null);
+      setCurrentDistance(null);
+    }
+  }, [triggerAlert]);
 
   /**
    * Core tracking logic using navigator.geolocation.watchPosition
@@ -78,29 +109,7 @@ export default function SafeRouteApp() {
         const { latitude: lat, longitude: lng } = position.coords;
         setUserPos([lat, lng]);
         setError(null);
-
-        let closestZone: RiskZone | null = null;
-        let minDistance = Infinity;
-
-        // Risk Detection Logic (CRITICAL)
-        // Check distance to all hardcoded zones
-        RISK_ZONES.forEach(zone => {
-          const d = calculateDistance(lat, lng, zone.lat, zone.lng);
-          // Alert within 400m threshold
-          if (d <= 400 && d < minDistance) {
-            minDistance = d;
-            closestZone = zone;
-          }
-        });
-
-        if (closestZone) {
-          setActiveRisk(closestZone);
-          setCurrentDistance(minDistance);
-          triggerAlert(closestZone, minDistance);
-        } else {
-          setActiveRisk(null);
-          setCurrentDistance(null);
-        }
+        checkRisk(lat, lng);
       },
       (err) => {
         let errMsg = "Unable to access GPS.";
@@ -117,7 +126,7 @@ export default function SafeRouteApp() {
     );
 
     return () => navigator.geolocation.clearWatch(watchId);
-  }, [mounted, triggerAlert]);
+  }, [mounted, checkRisk]);
 
   if (!mounted) return null;
 
@@ -169,17 +178,19 @@ export default function SafeRouteApp() {
           ))}
 
           {/* 1. GPS Tracking: User Marker */}
-          {userPos && (
+          {userPos && L && (
             <>
               <Marker 
                 position={userPos} 
-                icon={new (window as any).L.DivIcon({
+                icon={L.divIcon({
                   className: 'user-marker-container',
                   html: `
                     <div class="relative flex h-10 w-10 items-center justify-center">
                       <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
                       <div class="relative inline-flex rounded-full h-6 w-6 bg-blue-600 border-2 border-white shadow-xl flex items-center justify-center">
-                        <Navigation className="w-3 h-3 text-white fill-white" style="transform: rotate(45deg)" />
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg" style="transform: rotate(45deg)">
+                          <path d="M12 2L4.5 20.29L5.21 21L12 18L18.79 21L19.5 20.29L12 2Z" />
+                        </svg>
                       </div>
                     </div>
                   `,
