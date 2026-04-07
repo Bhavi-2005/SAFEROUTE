@@ -12,7 +12,8 @@ export interface RiskZone {
 }
 
 /**
- * 2) Hardcoded Accident Risk Zones (5 zones as requested)
+ * Hardcoded Accident Risk Zones for testing and demonstration.
+ * Locations are centered around San Francisco.
  */
 export const RISK_ZONES: RiskZone[] = [
   {
