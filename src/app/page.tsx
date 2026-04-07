@@ -2,13 +2,13 @@
 
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import dynamic from 'next/dynamic';
-import { AlertTriangle, MapPin, Loader2, ShieldAlert } from 'lucide-react';
+import { AlertTriangle, MapPin, Loader2, ShieldAlert, Navigation } from 'lucide-react';
 import { calculateDistance } from '@/lib/geo-utils';
 import { RISK_ZONES, RiskZone } from '@/lib/risk-zones';
 import { WarningBanner } from '@/components/WarningBanner';
 import { RiskLegend } from '@/components/RiskLegend';
 
-// Leaflet dynamic imports for Next.js Client Component compatibility
+// Leaflet components MUST be dynamically imported with SSR disabled in Next.js
 const MapContainer = dynamic(() => import('react-leaflet').then(mod => mod.MapContainer), { 
   ssr: false,
   loading: () => <div className="h-full w-full bg-slate-100 flex items-center justify-center"><Loader2 className="animate-spin text-primary" /></div>
@@ -16,18 +16,24 @@ const MapContainer = dynamic(() => import('react-leaflet').then(mod => mod.MapCo
 const TileLayer = dynamic(() => import('react-leaflet').then(mod => mod.TileLayer), { ssr: false });
 const Marker = dynamic(() => import('react-leaflet').then(mod => mod.Marker), { ssr: false });
 const Circle = dynamic(() => import('react-leaflet').then(mod => mod.Circle), { ssr: false });
-const useMap = dynamic(() => import('react-leaflet').then(mod => mod.useMap), { ssr: false });
 
 /**
- * Component to handle map re-centering when user moves
+ * MapController handles map re-centering.
+ * It is defined as a standard component to be rendered INSIDE MapContainer.
+ * We dynamically import it to ensure useMap() is only called on the client.
  */
-function MapController({ center }: { center: [number, number] }) {
-  const map = (useMap as any)();
+const MapController = ({ center }: { center: [number, number] | null }) => {
+  const { useMap } = require('react-leaflet');
+  const map = useMap();
+  
   useEffect(() => {
-    if (center) map.setView(center, 16, { animate: true });
+    if (center && map) {
+      map.setView(center, 16, { animate: true });
+    }
   }, [center, map]);
+  
   return null;
-}
+};
 
 export default function SafeRouteApp() {
   const [mounted, setMounted] = useState(false);
@@ -43,29 +49,30 @@ export default function SafeRouteApp() {
 
   useEffect(() => {
     setMounted(true);
-    // Dynamically import leaflet to avoid SSR issues
+    // Dynamically import leaflet library for client-side usage (icons, etc.)
     import('leaflet').then((leaflet) => {
-      setL(leaflet);
+      setL(leaflet.default);
     });
   }, []);
 
   /**
-   * Triggers the multi-modal alert: UI, Voice, and Vibration
+   * Triggers the multi-modal alert: UI Banner, Voice TTS, and Haptic Vibration
    */
   const triggerAlert = useCallback((zone: RiskZone, distance: number) => {
     const now = Date.now();
     if (now - lastAlertTime.current < ALERT_COOLDOWN) return;
 
-    // 1. Vibration (Haptic Feedback)
+    // 1. Vibration (Haptic Feedback) - Works on supported mobile browsers
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
-      navigator.vibrate([400, 200, 400]);
+      navigator.vibrate([500, 200, 500]);
     }
     
-    // 2. Voice Alert (Text-to-Speech)
+    // 2. Voice Alert (Speech Synthesis)
     if (typeof window !== 'undefined' && window.speechSynthesis) {
-      const message = `Warning! High risk zone ahead in ${Math.round(distance)} meters. ${zone.description}`;
+      const message = `Caution! approaching ${zone.type} zone in ${Math.round(distance)} meters. ${zone.description}`;
       const utterance = new SpeechSynthesisUtterance(message);
       utterance.rate = 1.0;
+      utterance.pitch = 1.0;
       window.speechSynthesis.speak(utterance);
     }
 
@@ -73,7 +80,8 @@ export default function SafeRouteApp() {
   }, []);
 
   /**
-   * Risk Detection Logic
+   * Risk Detection Logic (Rule-based Safety Engine)
+   * Runs whenever user location updates.
    */
   const checkRisk = useCallback((lat: number, lng: number) => {
     let closestZone: RiskZone | null = null;
@@ -81,7 +89,8 @@ export default function SafeRouteApp() {
 
     RISK_ZONES.forEach(zone => {
       const d = calculateDistance(lat, lng, zone.lat, zone.lng);
-      // Requirement: distance < 400 meters AND severity >= 8
+      // Alert threshold: Within 400 meters AND high severity (>= 8)
+      // This is a hybrid rule-based check that operates locally without network requirements
       if (d <= 400 && zone.severity >= 8 && d < minDistance) {
         minDistance = d;
         closestZone = zone;
@@ -99,11 +108,12 @@ export default function SafeRouteApp() {
   }, [triggerAlert]);
 
   /**
-   * Core tracking logic using navigator.geolocation.watchPosition
+   * GPS Tracking Initialization
    */
   useEffect(() => {
     if (!mounted || typeof window === 'undefined' || !navigator.geolocation) return;
 
+    // watchPosition provides continuous real-time updates as the user moves
     const watchId = navigator.geolocation.watchPosition(
       (position) => {
         const { latitude: lat, longitude: lng } = position.coords;
@@ -112,9 +122,9 @@ export default function SafeRouteApp() {
         checkRisk(lat, lng);
       },
       (err) => {
-        let errMsg = "Unable to access GPS.";
-        if (err.code === 1) errMsg = "Location permission denied.";
-        else if (err.code === 2) errMsg = "GPS signal lost.";
+        let errMsg = "Unable to lock GPS signal.";
+        if (err.code === 1) errMsg = "Location access was denied. Please enable GPS.";
+        else if (err.code === 2) errMsg = "GPS signal lost. Check your visibility to the sky.";
         else if (err.code === 3) errMsg = "GPS request timed out.";
         setError(errMsg);
       },
@@ -133,13 +143,13 @@ export default function SafeRouteApp() {
   return (
     <div className="h-[100dvh] w-full flex flex-col relative overflow-hidden bg-slate-100 font-sans">
       
-      {/* 4. Alert System: Top Warning Banner */}
+      {/* Real-time Proximity Warning Banner */}
       <WarningBanner 
         activeRisk={activeRisk} 
         distance={currentDistance} 
       />
 
-      {/* Header / Logo */}
+      {/* App Branding */}
       <header className="absolute top-4 left-4 z-[1000] pointer-events-none">
         <div className="bg-white/95 backdrop-blur-sm px-4 py-2 rounded-full border shadow-lg flex items-center gap-2 pointer-events-auto">
           <ShieldAlert className="w-5 h-5 text-primary" />
@@ -147,12 +157,14 @@ export default function SafeRouteApp() {
         </div>
       </header>
 
-      {/* 5. UI Improvements: Risk Legend */}
-      <div className="absolute bottom-24 left-4 z-[1000]">
-        <RiskLegend />
+      {/* Safety Reference Legend */}
+      <div className="absolute bottom-24 left-4 z-[1000] pointer-events-none sm:block hidden">
+        <div className="pointer-events-auto">
+          <RiskLegend />
+        </div>
       </div>
 
-      {/* Main Map Content */}
+      {/* Interactive Safety Map */}
       <main className="flex-1 w-full relative">
         <MapContainer 
           center={[37.7749, -122.4194]} 
@@ -162,7 +174,7 @@ export default function SafeRouteApp() {
         >
           <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
           
-          {/* 2. Risk Zones Rendering */}
+          {/* Static Risk Zones Visualization */}
           {RISK_ZONES.map(z => (
             <Circle 
               key={z.id} 
@@ -177,7 +189,7 @@ export default function SafeRouteApp() {
             />
           ))}
 
-          {/* 1. GPS Tracking: User Marker */}
+          {/* User Location Marker with Dynamic Updates */}
           {userPos && L && (
             <>
               <Marker 
@@ -187,8 +199,8 @@ export default function SafeRouteApp() {
                   html: `
                     <div class="relative flex h-10 w-10 items-center justify-center">
                       <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                      <div class="relative inline-flex rounded-full h-6 w-6 bg-blue-600 border-2 border-white shadow-xl flex items-center justify-center">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg" style="transform: rotate(45deg)">
+                      <div class="relative inline-flex rounded-full h-7 w-7 bg-blue-600 border-2 border-white shadow-xl flex items-center justify-center">
+                         <svg width="14" height="14" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg" style="transform: rotate(45deg)">
                           <path d="M12 2L4.5 20.29L5.21 21L12 18L18.79 21L19.5 20.29L12 2Z" />
                         </svg>
                       </div>
@@ -203,40 +215,44 @@ export default function SafeRouteApp() {
           )}
         </MapContainer>
 
-        {/* GPS Error State */}
+        {/* GPS Permission/Error Overlay */}
         {error && (
           <div className="absolute inset-0 z-[3000] bg-white/95 backdrop-blur-md flex items-center justify-center p-8 text-center">
             <div className="max-w-xs space-y-4">
-              <div className="bg-red-100 p-4 rounded-full w-16 h-16 flex items-center justify-center mx-auto">
-                <MapPin className="w-8 h-8 text-red-600" />
+              <div className="bg-red-50 p-6 rounded-full w-20 h-20 flex items-center justify-center mx-auto">
+                <MapPin className="w-10 h-10 text-red-600" />
               </div>
-              <h3 className="text-xl font-bold text-slate-900">GPS Signal Required</h3>
+              <h3 className="text-xl font-bold text-slate-900 leading-tight">GPS Signal Required</h3>
               <p className="text-slate-500 text-sm leading-relaxed">{error}</p>
               <button 
                 onClick={() => window.location.reload()} 
-                className="w-full bg-primary text-white py-3 rounded-xl font-bold shadow-lg shadow-primary/30 transition-active"
+                className="w-full bg-primary text-white py-4 rounded-2xl font-bold shadow-xl shadow-primary/20 active:scale-95 transition-transform"
               >
-                Retry GPS Connection
+                Enable Tracking
               </button>
             </div>
           </div>
         )}
       </main>
 
-      {/* Footer Status Bar */}
-      <footer className="h-20 bg-white border-t border-slate-200 px-6 flex items-center justify-between z-[1000] shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
-        <div className="flex items-center gap-3">
-          <div className={`w-3 h-3 rounded-full ${userPos ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' : 'bg-slate-300'}`} />
+      {/* Mobile Footer Status Dashboard */}
+      <footer className="h-24 bg-white border-t border-slate-100 px-6 flex items-center justify-between z-[1000] shadow-[0_-8px_30px_rgba(0,0,0,0.04)]">
+        <div className="flex items-center gap-4">
+          <div className={`w-3.5 h-3.5 rounded-full ${userPos ? 'bg-green-500 shadow-[0_0_12px_rgba(34,197,94,0.6)] animate-pulse' : 'bg-slate-300'}`} />
           <div className="flex flex-col">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">System Status</span>
-            <span className="text-xs font-bold text-slate-700 tracking-tight">
-              {userPos ? 'Active Protection' : 'Searching for GPS...'}
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Protection Status</span>
+            <span className="text-sm font-bold text-slate-800">
+              {userPos ? 'Active Live Tracking' : 'Initializing GPS...'}
             </span>
           </div>
         </div>
-        <div className="bg-slate-50 p-2 rounded-lg border border-slate-100">
-           <AlertTriangle className={`w-5 h-5 ${activeRisk ? 'text-red-500 animate-pulse' : 'text-slate-300'}`} />
-        </div>
+        
+        <button 
+          onClick={() => { if(userPos) setUserPos([...userPos]) }} // Trigger recenter
+          className="bg-slate-50 hover:bg-slate-100 p-3 rounded-xl border border-slate-200 transition-colors"
+        >
+           <Navigation className={`w-6 h-6 ${activeRisk ? 'text-red-500' : 'text-slate-600'}`} />
+        </button>
       </footer>
     </div>
   );
