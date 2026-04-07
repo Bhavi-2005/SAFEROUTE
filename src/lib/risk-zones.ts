@@ -4,15 +4,14 @@ export interface RiskZone {
   id: string;
   lat: number;
   lng: number;
-  radius: number; // in meters
+  radius: number; // radius for visualization in meters
   level: RiskLevel;
   type: string;
   description: string;
 }
 
 /**
- * Hardcoded accident risk zones for demonstration.
- * Locations are centered around common metropolitan test areas.
+ * 2) Hardcoded Accident Risk Zones (3-5 zones)
  */
 export const RISK_ZONES: RiskZone[] = [
   {
@@ -22,7 +21,7 @@ export const RISK_ZONES: RiskZone[] = [
     radius: 400,
     level: 'high',
     type: 'Complex Intersection',
-    description: 'High frequency of pedestrian incidents and blind turns.',
+    description: 'High frequency of blind turns and pedestrian traffic.',
   },
   {
     id: 'zone-2',
@@ -31,7 +30,7 @@ export const RISK_ZONES: RiskZone[] = [
     radius: 400,
     level: 'medium',
     type: 'Narrow Corridor',
-    description: 'Reduced visibility and frequent cyclist activity.',
+    description: 'Reduced visibility and high cyclist activity.',
   },
   {
     id: 'zone-3',
@@ -39,25 +38,25 @@ export const RISK_ZONES: RiskZone[] = [
     lng: -122.4862,
     radius: 400,
     level: 'high',
-    type: 'Sharp Highway Curve',
-    description: 'Dangerous curve with history of hydroplaning incidents.',
+    type: 'Highway Curve',
+    description: 'Sharp blind curve with heavy high-speed traffic.',
   },
   {
     id: 'zone-4',
-    lat: 37.7510,
-    lng: -122.4476,
-    radius: 400,
-    level: 'medium',
-    type: 'School Zone',
-    description: 'High child pedestrian traffic during morning and afternoon peaks.',
-  },
-  {
-    id: 'zone-5',
     lat: 37.8012,
     lng: -122.4012,
     radius: 400,
     level: 'high',
     type: 'Steep Descent',
-    description: 'Steep grade with potential for brake failure and high speeds.',
+    description: 'Steep grade with risk of high-speed collisions.',
+  },
+  {
+    id: 'zone-5',
+    lat: 37.7510,
+    lng: -122.4476,
+    radius: 400,
+    level: 'medium',
+    type: 'School Zone',
+    description: 'Increased child pedestrian traffic during school hours.',
   }
 ];

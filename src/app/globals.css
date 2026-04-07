@@ -4,28 +4,26 @@
 
 @layer base {
   :root {
-    --background: 214 30% 95%; /* #ECF1F7 */
-    --foreground: 217 33% 17%;
+    --background: 210 20% 98%;
+    --foreground: 222 47% 11%;
     --card: 0 0% 100%;
-    --card-foreground: 217 33% 17%;
+    --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
-    --popover-foreground: 217 33% 17%;
-    --primary: 216 93% 58%; /* #3383F7 */
+    --popover-foreground: 222 47% 11%;
+    --primary: 221 83% 53%;
     --primary-foreground: 210 40% 98%;
-    --secondary: 191 66% 68%; /* #76CFE3 */
-    --secondary-foreground: 217 33% 17%;
-    --muted: 214 30% 90%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 210 40% 96%;
     --muted-foreground: 215 16% 47%;
-    --accent: 191 66% 68%; /* #76CFE3 */
-    --accent-foreground: 217 33% 17%;
-    --destructive: 0 84% 60%; /* Bright Red */
+    --accent: 210 40% 96%;
+    --accent-foreground: 222 47% 11%;
+    --destructive: 0 84% 60%;
     --destructive-foreground: 210 40% 98%;
-    --warning: 25 95% 53%; /* Orange */
-    --warning-foreground: 210 40% 98%;
-    --border: 214 30% 85%;
-    --input: 214 30% 85%;
-    --ring: 216 93% 58%;
-    --radius: 0.75rem;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 221 83% 53%;
+    --radius: 1rem;
   }
 }
 
@@ -34,13 +32,25 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground font-body;
+    @apply bg-background text-foreground font-body antialiased;
   }
 }
 
-/* Leaflet specific styles to ensure it fills the container */
+/* Leaflet Layout */
 .leaflet-container {
   width: 100%;
   height: 100%;
   z-index: 0;
+}
+
+/* User marker glow animation */
+.user-marker-container {
+  background: transparent;
+  border: none;
+}
+
+/* Button active state for mobile */
+.transition-active:active {
+  transform: scale(0.96);
+  opacity: 0.9;
 }
