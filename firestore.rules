@@ -1,0 +1,104 @@
+/**
+ * SafeRoute AI - Firestore Security Rules (Prototyping Mode)
+ *
+ * CORE PHILOSOPHY:
+ * This ruleset enforces a strict user-ownership model for personal safety data while 
+ * providing universal access to shared geographical risk data. It prioritizes 
+ * authorization independence by ensuring each document contains the necessary 
+ * identity markers (userId) to be secured via path-based and resource-based checks.
+ *
+ * DATA STRUCTURE:
+ * 1. /users/{userId}/... : Private user-specific trees. All data nested here is 
+ *    restricted to the authenticated user matching the {userId} path segment.
+ *    - /preferences: User-specific settings (tracking, alerts, thresholds).
+ *    - /alertLogs: Historical safety alerts triggered for the user.
+ * 2. /riskZones/{riskZoneId} : Global, public collection of accident-prone areas.
+ *
+ * KEY SECURITY DECISIONS:
+ * - Ownership Enforcement: Uses 'isOwner' logic to ensure users can only read 
+ *   or modify their own preferences and alert logs.
+ * - Public Safety Data: Risk zones are readable by everyone (including guests) 
+ *   to ensure client-side detection works even for anonymous users.
+ * - Write Protection: Only the system (or future admins) can define RiskZones; 
+ *   client-side writes to this collection are blocked.
+ * - Relational Integrity: Enforces that 'userId' fields inside documents match 
+ *   the path they are stored in, preventing data spoofing.
+ *
+ * DENORMALIZATION FOR AUTHORIZATION:
+ * - All user-owned documents (Preferences, AlertLogs) include a 'userId' field. 
+ *   This allows for fast, non-recursive security checks without calling get().
+ */
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- GLOBAL HELPER FUNCTIONS ---
+
+    /** 
+     * @description Basic check to see if the request is from an authenticated user.
+     */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /** 
+     * @description Checks if the authenticated user's UID matches the provided userId.
+     */
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    /** 
+     * @description Ensures the document exists and the current user is the owner.
+     * Used for update and delete operations.
+     */
+    function isExistingOwner(userId) {
+      return resource != null && isOwner(userId);
+    }
+
+    // --- COLLECTION RULES ---
+
+    /**
+     * @description Secures user preferences including tracking toggles and alert thresholds.
+     * @path /users/{userId}/preferences/{preferenceId}
+     * @allow (get/list) User reading their own preference document.
+     * @deny (list) User attempting to list another user's preference subcollection.
+     * @principle Restricts access to a user's own data tree via path-based authorization.
+     */
+    match /users/{userId}/preferences/{preferenceId} {
+      allow get, list: if isOwner(userId);
+      allow create: if isOwner(userId) && request.resource.data.userId == userId;
+      allow update: if isExistingOwner(userId) && request.resource.data.userId == resource.data.userId;
+      allow delete: if isExistingOwner(userId);
+    }
+
+    /**
+     * @description Secures logs of safety alerts triggered for a specific user.
+     * @path /users/{userId}/alertLogs/{alertLogId}
+     * @allow (create) Client app logging a new alert matching the active user's UID.
+     * @deny (update) Attempting to change the 'userId' on an existing alert log.
+     * @principle Validates relational integrity between the document field and path.
+     */
+    match /users/{userId}/alertLogs/{alertLogId} {
+      allow get, list: if isOwner(userId);
+      allow create: if isOwner(userId) && request.resource.data.userId == userId;
+      allow update: if isExistingOwner(userId) && request.resource.data.userId == resource.data.userId;
+      allow delete: if isExistingOwner(userId);
+    }
+
+    /**
+     * @description Global collection of accident-prone zones used for risk detection.
+     * @path /riskZones/{riskZoneId}
+     * @allow (get/list) Any user (including anonymous) reading danger zone coordinates.
+     * @deny (create/update/delete) Any client-side attempt to modify global risk data.
+     * @principle Public Read with Owner-Only (Admin-Only) Writes.
+     */
+    match /riskZones/{riskZoneId} {
+      allow get, list: if true;
+      // CRITICAL: Cannot implement owner-only writes. The 'RiskZone' entity is missing an 'ownerId' or 'authorId' field.
+      allow create, update, delete: if false; // TODO: Restrict to Admin roles or add owner validation once schema includes authorId.
+    }
+
+  }
+}

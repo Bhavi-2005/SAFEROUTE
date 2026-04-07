@@ -1,0 +1,222 @@
+{
+  "entities": {
+    "UserPreference": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "UserPreference",
+      "type": "object",
+      "description": "Stores user-specific settings and preferences for the SafeRoute AI application, enabling a personalized experience and persistent feature toggles. This data would typically be stored client-side (e.g., IndexedDB) for offline resilience.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the UserPreference entity."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to an external user identifier provided by the authentication system. (Relationship: User 1:1 UserPreference)"
+        },
+        "enablePersistentTracking": {
+          "type": "boolean",
+          "description": "A user-configurable option to enable persistent location tracking. For a web application, this means tracking for as long as the browser tab is open, even in the background. It does not imply tracking when the browser or device is off."
+        },
+        "enableVoiceAlerts": {
+          "type": "boolean",
+          "description": "Indicates whether the multi-modal alert system should include voice announcements."
+        },
+        "enableHapticFeedback": {
+          "type": "boolean",
+          "description": "Indicates whether the multi-modal alert system should include haptic feedback."
+        },
+        "alertDistanceThreshold": {
+          "type": "number",
+          "description": "The user-defined danger radius in meters within which an alert should be triggered when approaching a risk zone."
+        },
+        "lastUpdatedAt": {
+          "type": "string",
+          "description": "Timestamp indicating when these preferences were last updated.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "enablePersistentTracking",
+        "enableVoiceAlerts",
+        "enableHapticFeedback",
+        "alertDistanceThreshold"
+      ]
+    },
+    "RiskZone": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "RiskZone",
+      "type": "object",
+      "description": "Represents a geographical area identified as accident-prone, used for client-side intelligent risk detection. While currently hardcoded, modeling it as an entity allows for future dynamic updates or personalized risk zone management.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the RiskZone entity."
+        },
+        "name": {
+          "type": "string",
+          "description": "A descriptive name for the risk zone (e.g., 'Busy Intersection A', 'School Zone')."
+        },
+        "description": {
+          "type": "string",
+          "description": "A detailed description providing more context about the risk zone, its hazards, or specific characteristics."
+        },
+        "latitude": {
+          "type": "number",
+          "description": "The central geographical latitude coordinate of the risk zone."
+        },
+        "longitude": {
+          "type": "number",
+          "description": "The central geographical longitude coordinate of the risk zone."
+        },
+        "radiusMeters": {
+          "type": "number",
+          "description": "The effective radius of the circular risk zone in meters, defining its area of influence."
+        },
+        "riskLevel": {
+          "type": "string",
+          "description": "The severity level of the risk zone, typically 'HIGH' (red) or 'MEDIUM' (orange), used for visualization and alert prioritization."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp indicating when the risk zone was created or last defined.",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp indicating when the risk zone's details were last updated.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "latitude",
+        "longitude",
+        "radiusMeters",
+        "riskLevel"
+      ]
+    },
+    "AlertLog": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "AlertLog",
+      "type": "object",
+      "description": "Records instances of triggered safety alerts, providing a historical log of detected risks for user review, analysis, or future improvements to the risk detection system.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the AlertLog entry."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to an external user identifier who received the alert. (Relationship: User 1:N AlertLog)"
+        },
+        "riskZoneId": {
+          "type": "string",
+          "description": "Reference to the RiskZone entity that triggered this alert. (Relationship: RiskZone 1:N AlertLog)"
+        },
+        "alertTimestamp": {
+          "type": "string",
+          "description": "The precise date and time when the alert was triggered.",
+          "format": "date-time"
+        },
+        "userLatitudeAtAlert": {
+          "type": "number",
+          "description": "The user's geographical latitude at the moment the alert was triggered."
+        },
+        "userLongitudeAtAlert": {
+          "type": "number",
+          "description": "The user's geographical longitude at the moment the alert was triggered."
+        },
+        "distanceToRiskZoneMeters": {
+          "type": "number",
+          "description": "The calculated distance in meters between the user's location and the triggering risk zone at the time of the alert."
+        },
+        "alertMessage": {
+          "type": "string",
+          "description": "The specific warning message presented to the user (e.g., 'Warning! High risk zone ahead in X meters')."
+        },
+        "alertType": {
+          "type": "string",
+          "description": "The category or nature of the alert, such as 'PROXIMITY_WARNING' or 'RISK_ENTERED'."
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "riskZoneId",
+        "alertTimestamp",
+        "userLatitudeAtAlert",
+        "userLongitudeAtAlert",
+        "distanceToRiskZoneMeters",
+        "alertMessage",
+        "alertType"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/users/{userId}/preferences",
+        "definition": {
+          "entityName": "UserPreference",
+          "schema": {
+            "$ref": "#/backend/entities/UserPreference"
+          },
+          "description": "Stores individual user preferences and settings for the SafeRoute AI application. Each user will have a single document in this subcollection, identified by the user's UID. Includes denormalized 'userId' for authorization independence, matching the path segment.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier of the user, corresponding to `request.auth.uid`."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/alertLogs/{alertLogId}",
+        "definition": {
+          "entityName": "AlertLog",
+          "schema": {
+            "$ref": "#/backend/entities/AlertLog"
+          },
+          "description": "Records historical instances of safety alerts triggered for a specific user. This collection is user-specific and provides a log for review. Includes denormalized 'userId' for authorization independence, matching the path segment.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier of the user who received the alert, corresponding to `request.auth.uid`."
+            },
+            {
+              "name": "alertLogId",
+              "description": "The unique identifier for a specific alert log entry."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/riskZones/{riskZoneId}",
+        "definition": {
+          "entityName": "RiskZone",
+          "schema": {
+            "$ref": "#/backend/entities/RiskZone"
+          },
+          "description": "Contains predefined, global geographical risk zones. This data is read-only and publicly accessible to all users for client-side risk detection and visualization. No specific authorization fields are needed as access is global read.",
+          "params": [
+            {
+              "name": "riskZoneId",
+              "description": "The unique identifier for a specific risk zone."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore data structure for SafeRoute AI prioritizes authorization independence, structural segregation, and clear access modeling to ensure security, scalability, and debuggability. All authorization rules are based on path ownership or global read access, eliminating the need for complex `get()` calls within security rules, which is critical for atomic operations and maintainability. The design supports the 'Rules are not Filters' principle by ensuring that all `list` operations are implicitly secure by design for user-specific data, and explicitly open for globally shared data.\n\n**Authorization Independence:**\n1.  **User Preferences (`/users/{userId}/preferences`):** Each `UserPreference` document is directly placed under the authenticated user's path. The document itself contains a `userId` field. This denormalization means that the ownership information is available directly within the document and is mirrored in the path's wildcard (`{userId}`). Security rules can simply verify `request.auth.uid == userId` (from the path wildcard) or `request.auth.uid == resource.data.userId` without performing any `get()` operations on parent documents. This guarantees that a user can only interact with their own preferences.\n2.  **Alert Logs (`/users/{userId}/alertLogs/{alertLogId}`):** Similar to user preferences, each `AlertLog` document is nested under the owner's `userId` path and includes a `userId` field within the document. This ensures the necessary authorization context is fully embedded. Security rules will use `request.auth.uid == userId` (from the path wildcard) to grant access, making each alert log entry independent of any parent document's data for authorization.\n\n**QAPs (Rules are not Filters):**\n1.  **User Preferences (`/users/{userId}/preferences`):** Since there is expected to be a single preferences document per user at this path, `list` operations effectively function as a secure `get` for the user's specific document. The path structure inherently filters for the current user.\n2.  **Alert Logs (`/users/{userId}/alertLogs`):** Users can only query (list) their own alert logs because the path `userId` segment must match `request.auth.uid`. Firestore's security rules will automatically enforce this, ensuring that `list` queries cannot expose other users' data.\n3.  **Risk Zones (`/riskZones`):** This collection is designed for global, public read access. Any authenticated user can list all `RiskZone` documents. This fulfills the QAP principle as the intent is to allow all users to read all documents in this collection for client-side processing, without any filtering logic being offloaded to security rules.\n\n**Structural Segregation:**\n*   User-specific and private data (`UserPreference`, `AlertLog`) are strictly segregated under `/users/{userId}/...` paths. This ensures that a user's private data cannot be accidentally accessed or leaked.\n*   Global, publicly readable data (`RiskZone`) is placed in a top-level collection (`/riskZones`), completely separate from user-specific data. This clearly defines its security posture as universally accessible for reading.\n\nThis design effectively isolates data based on its access requirements, denormalizes authorization context where necessary, and simplifies security rules, leading to a robust and easily debuggable system."
+  }
+}
