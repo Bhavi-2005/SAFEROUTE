@@ -2,99 +2,95 @@
 
 import { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Circle, useMap, Popup } from 'react-leaflet';
-import L from 'leaflet';
-import { RISK_ZONES } from '@/lib/risk-zones';
+import { RISK_ZONES, RiskZone } from '@/lib/risk-zones';
 
-// Fix Leaflet marker icon issue in Next.js
-const DefaultIcon = L.icon({
-  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-});
-L.Marker.prototype.options.icon = DefaultIcon;
-
-// User position icon (custom blue dot)
-const UserIcon = L.divIcon({
-  className: 'user-marker',
-  html: `<div class="relative flex h-8 w-8">
-    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-500 opacity-75"></span>
-    <span class="relative inline-flex rounded-full h-8 w-8 bg-blue-600 border-4 border-white shadow-xl"></span>
-  </div>`,
-  iconSize: [32, 32],
-  iconAnchor: [16, 16],
-});
-
-function MapController({ position }: { position: { lat: number; lng: number } | null }) {
+/**
+ * Handles map re-centering when user position changes.
+ * This component is only used inside MapContainer.
+ */
+function MapController({ center }: { center: [number, number] | null }) {
   const map = useMap();
   
   useEffect(() => {
-    const handleRecenter = (e: any) => {
-      if (e.detail) {
-        map.setView([e.detail.lat, e.detail.lng], 16, { animate: true });
-      }
-    };
-    
-    window.addEventListener('map-recenter', handleRecenter);
-    
-    // Initial centering
-    if (position) {
-      map.setView([position.lat, position.lng], 15);
+    if (center && map) {
+      map.setView(center, map.getZoom(), { animate: true });
     }
-    
-    return () => window.removeEventListener('map-recenter', handleRecenter);
-  }, [position, map]);
+  }, [center, map]);
   
   return null;
 }
 
 interface SafeMapProps {
-  userPosition: { lat: number; lng: number } | null;
+  userPos: [number, number] | null;
+  activeRisk: RiskZone | null;
 }
 
-export default function SafeMap({ userPosition }: SafeMapProps) {
-  // Center of US if no position
-  const initialPosition = userPosition || { lat: 37.7749, lng: -122.4194 };
+export default function SafeMap({ userPos, activeRisk }: SafeMapProps) {
+  const [L, setL] = useState<any>(null);
+
+  useEffect(() => {
+    // Dynamic import Leaflet only on the client
+    import('leaflet').then((leaflet) => {
+      const leafletLib = leaflet.default;
+      // Fix default marker icons
+      delete (leafletLib.Icon.Default.prototype as any)._getIconUrl;
+      leafletLib.Icon.Default.mergeOptions({
+        iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+        iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+        shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+      });
+      setL(leafletLib);
+    });
+  }, []);
+
+  if (!L) return null;
 
   return (
     <MapContainer 
-      center={[initialPosition.lat, initialPosition.lng]} 
+      center={[37.7749, -122.4194]} 
       zoom={14} 
+      style={{ height: '100%', width: '100%' }} 
       zoomControl={false}
-      className="z-0"
     >
-      <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-      />
+      <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
       
       {/* Risk Zones Rendering */}
-      {RISK_ZONES.map((zone) => (
-        <Circle
-          key={zone.id}
-          center={[zone.lat, zone.lng]}
-          pathOptions={{
-            fillColor: zone.level === 'high' ? '#ef4444' : '#f59e0b',
-            color: zone.level === 'high' ? '#dc2626' : '#d97706',
-            fillOpacity: 0.3,
-            weight: 2
+      {RISK_ZONES.map(z => (
+        <Circle 
+          key={z.id} 
+          center={[z.lat, z.lng]} 
+          radius={z.radius} 
+          pathOptions={{ 
+            fillColor: z.level === 'high' ? '#ef4444' : '#f59e0b', 
+            color: z.level === 'high' ? '#ef4444' : '#f59e0b', 
+            fillOpacity: 0.3, 
+            weight: 2 
           }}
-          radius={zone.radius}
-        >
-          <Popup>
-            <div className="p-2">
-              <p className="font-bold text-slate-900 m-0">{zone.type}</p>
-              <p className="text-xs text-slate-500 mt-1">{zone.description}</p>
-            </div>
-          </Popup>
-        </Circle>
+        />
       ))}
 
-      {/* User Current Location */}
-      {userPosition && (
+      {/* User Location with Pulsing Marker */}
+      {userPos && (
         <>
-          <Marker position={[userPosition.lat, userPosition.lng]} icon={UserIcon} />
-          <MapController position={userPosition} />
+          <Marker 
+            position={userPos} 
+            icon={L.divIcon({
+              className: 'user-marker-container',
+              html: `
+                <div class="relative flex h-10 w-10 items-center justify-center">
+                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                  <div class="relative rounded-full h-7 w-7 bg-blue-600 border-2 border-white shadow-xl flex items-center justify-center">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="white" style="transform: rotate(45deg)">
+                      <path d="M12 2L4.5 20.29L5.21 21L12 18L18.79 21L19.5 20.29L12 2Z" />
+                    </svg>
+                  </div>
+                </div>
+              `,
+              iconSize: [40, 40],
+              iconAnchor: [20, 20]
+            })} 
+          />
+          <MapController center={userPos} />
         </>
       )}
     </MapContainer>
