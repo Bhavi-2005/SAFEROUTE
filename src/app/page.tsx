@@ -1,12 +1,14 @@
+
 'use client';
 
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import dynamic from 'next/dynamic';
-import { ShieldAlert, Loader2, Navigation, MapPin } from 'lucide-react';
+import { ShieldAlert, Loader2, Navigation, MapPin, Power } from 'lucide-react';
 import { calculateDistance } from '@/lib/geo-utils';
 import { RISK_ZONES, RiskZone } from '@/lib/risk-zones';
 import { WarningBanner } from '@/components/WarningBanner';
 import { RiskLegend } from '@/components/RiskLegend';
+import { Button } from '@/components/ui/button';
 
 // Leaflet components MUST be dynamically imported with SSR disabled
 const SafeMap = dynamic(() => import('@/components/SafeMap'), { 
@@ -23,6 +25,7 @@ const SafeMap = dynamic(() => import('@/components/SafeMap'), {
 
 export default function SafeRouteApp() {
   const [mounted, setMounted] = useState(false);
+  const [trackingActive, setTrackingActive] = useState(false);
   const [userPos, setUserPos] = useState<[number, number] | null>(null);
   const [activeRisk, setActiveRisk] = useState<RiskZone | null>(null);
   const [currentDistance, setCurrentDistance] = useState<number | null>(null);
@@ -40,6 +43,8 @@ export default function SafeRouteApp() {
    * Triggers the multi-modal alert: UI, Voice, and Vibration
    */
   const triggerAlert = useCallback((zone: RiskZone, distance: number) => {
+    if (!trackingActive) return;
+
     const now = Date.now();
     if (now - lastAlertTime.current < ALERT_COOLDOWN) return;
 
@@ -56,7 +61,7 @@ export default function SafeRouteApp() {
     }
 
     lastAlertTime.current = now;
-  }, []);
+  }, [trackingActive]);
 
   /**
    * Risk Detection Logic
@@ -88,7 +93,7 @@ export default function SafeRouteApp() {
    * Continuous GPS Tracking
    */
   useEffect(() => {
-    if (!mounted || typeof window === 'undefined' || !navigator.geolocation) return;
+    if (!mounted || !trackingActive || typeof window === 'undefined' || !navigator.geolocation) return;
 
     const watchId = navigator.geolocation.watchPosition(
       (position) => {
@@ -107,7 +112,7 @@ export default function SafeRouteApp() {
     );
 
     return () => navigator.geolocation.clearWatch(watchId);
-  }, [mounted, checkRisk]);
+  }, [mounted, trackingActive, checkRisk]);
 
   if (!mounted) return null;
 
@@ -125,6 +130,27 @@ export default function SafeRouteApp() {
         </div>
       </header>
 
+      {/* Activation Overlay - Required for Audio/Vibration Context */}
+      {!trackingActive && (
+        <div className="absolute inset-0 z-[2500] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-6 text-center">
+          <div className="max-w-xs w-full bg-white rounded-3xl p-8 shadow-2xl space-y-6 animate-in zoom-in duration-300">
+            <div className="bg-primary/10 p-5 rounded-full w-20 h-20 flex items-center justify-center mx-auto">
+              <Power className="w-10 h-10 text-primary" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-black text-slate-900 leading-tight">Safety Systems Offline</h2>
+              <p className="text-slate-500 text-sm mt-2">Activate tracking to enable real-time hazard detection and voice alerts.</p>
+            </div>
+            <Button 
+              onClick={() => setTrackingActive(true)}
+              className="w-full h-14 text-lg font-bold rounded-2xl shadow-lg active:scale-95 transition-all"
+            >
+              Start Safety Tracking
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Risk Map */}
       <main className="flex-1 w-full relative">
         <SafeMap userPos={userPos} activeRisk={activeRisk} />
@@ -135,7 +161,7 @@ export default function SafeRouteApp() {
         </div>
 
         {/* GPS Error Overlay */}
-        {error && (
+        {error && trackingActive && (
           <div className="absolute inset-0 z-[3000] bg-white/95 backdrop-blur-md flex items-center justify-center p-8 text-center">
             <div className="max-w-xs space-y-4">
               <div className="bg-red-50 p-6 rounded-full w-20 h-20 flex items-center justify-center mx-auto">
@@ -143,12 +169,13 @@ export default function SafeRouteApp() {
               </div>
               <h3 className="text-xl font-bold text-slate-900">GPS Required</h3>
               <p className="text-slate-500 text-sm leading-relaxed">{error}</p>
-              <button 
+              <Button 
                 onClick={() => window.location.reload()} 
-                className="w-full bg-primary text-white py-4 rounded-2xl font-bold shadow-xl active:scale-95 transition-transform"
+                variant="destructive"
+                className="w-full h-14 rounded-2xl font-bold shadow-xl active:scale-95 transition-transform"
               >
-                Enable Tracking
-              </button>
+                Reconnect GPS
+              </Button>
             </div>
           </div>
         )}
@@ -157,18 +184,19 @@ export default function SafeRouteApp() {
       {/* Dashboard Footer */}
       <footer className="h-24 bg-white border-t border-slate-100 px-6 flex items-center justify-between z-[1000]">
         <div className="flex items-center gap-4">
-          <div className={`w-3.5 h-3.5 rounded-full ${userPos ? 'bg-green-500 animate-pulse shadow-[0_0_12px_rgba(34,197,94,0.6)]' : 'bg-slate-300'}`} />
+          <div className={`w-3.5 h-3.5 rounded-full ${trackingActive && userPos ? 'bg-green-500 animate-pulse shadow-[0_0_12px_rgba(34,197,94,0.6)]' : 'bg-slate-300'}`} />
           <div className="flex flex-col">
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Protection</span>
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Protection Status</span>
             <span className="text-sm font-bold text-slate-800">
-              {userPos ? 'Active Tracking' : 'Initializing...'}
+              {trackingActive ? (userPos ? 'Live Tracking' : 'Locating...') : 'Offline'}
             </span>
           </div>
         </div>
         
         <button 
           onClick={() => { if(userPos) setUserPos([...userPos]) }} 
-          className="bg-slate-50 hover:bg-slate-100 p-3 rounded-xl border border-slate-200 transition-colors"
+          disabled={!trackingActive}
+          className="bg-slate-50 hover:bg-slate-100 p-3 rounded-xl border border-slate-200 transition-colors disabled:opacity-50"
         >
            <Navigation className={`w-6 h-6 ${activeRisk ? 'text-red-500' : 'text-slate-600'}`} />
         </button>
