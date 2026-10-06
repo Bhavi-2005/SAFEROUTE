@@ -70,5 +70,35 @@ Traditional navigation apps tell you *where* to go. SafeRoute AI tells you *how 
 To test the alerts without leaving your desk:
 1.  Open **Chrome DevTools** (F12).
 2.  Go to **Sensors** (in the "More Tools" menu).
-3.  Override **Location** with a "High Risk" coordinate: `37.7749, -122.4194`.
+3.  Override **Location** with any of the demo coordinates listed below.
 4.  The map will update, and you will hear the safety warning instantly.
+
+### 📍 Demo Risk Zone Coordinates
+
+#### High Risk Zones (Triggers Severity ≥ 8 Alerts)
+1. **Lombard Street (High Risk)**
+   - **Coordinates**: `37.8021`, `-122.4187`
+   - **Alert Triggered**: Severity 10 (Sharp curves and steep grade).
+2. **Market St & Octavia Blvd (High Risk)**
+   - **Coordinates**: `37.7725`, `-122.4230`
+   - **Alert Triggered**: Severity 9 (Complex interchange with heavy vehicle and bike traffic).
+3. **Van Ness & Geary Blvd (High Risk)**
+   - **Coordinates**: `37.7854`, `-122.4215`
+   - **Alert Triggered**: Severity 8 (High-density transit corridor).
+4. **Complex Intersection (High Risk)**
+   - **Coordinates**: `37.7749`, `-122.4194`
+   - **Alert Triggered**: Severity 9 (High blind turns and pedestrian traffic).
+5. **Highway Curve (High Risk)**
+   - **Coordinates**: `37.7694`, `-122.4862`
+   - **Alert Triggered**: Severity 10 (Sharp blind curve with high-speed traffic).
+6. **Steep Descent (High Risk)**
+   - **Coordinates**: `37.8012`, `-122.4012`
+   - **Alert Triggered**: Severity 8 (Steep grade with risk of high-speed collisions).
+
+#### Medium Risk Zones
+7. **Narrow Corridor**
+   - **Coordinates**: `37.7833`, `-122.4167`
+   - **Description**: Reduced visibility and high cyclist activity (Severity 6).
+8. **School Zone**
+   - **Coordinates**: `37.7510`, `-122.4476`
+   - **Description**: Increased child pedestrian traffic during school hours (Severity 7).
